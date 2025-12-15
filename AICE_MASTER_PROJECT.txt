@@ -1,0 +1,639 @@
+# AICE Master - AI 기반 자격증 학습 플랫폼
+
+## 📋 프로젝트 개요
+
+**프로젝트명**: AICE Master  
+**목표**: AICE Associate 자격증 수험생을 위한 AI 기반 학습 플랫폼  
+**핵심 가치**: 기출문제 부족 문제를 AI 문제 생성으로 해결  
+
+### 문제 정의
+- AICE Associate 시험의 기출문제가 부족함
+- 수험생들이 충분한 연습 문제를 구하기 어려움
+- 개인별 약점 파악 및 맞춤 학습이 어려움
+
+### 솔루션
+- Claude API를 활용한 AI 문제 무한 생성
+- 주제별/난이도별 맞춤 문제 제공
+- 오답 관리 및 학습 통계 제공
+
+---
+
+## 🎯 MVP 기능 범위
+
+### ✅ MVP에 포함 (Phase 1)
+
+| 기능 | 설명 | 우선순위 |
+|------|------|----------|
+| 회원가입/로그인 | 이메일 기반 JWT 인증 | P0 |
+| AI 문제 생성 | Claude API로 문제 생성 | P0 |
+| 문제 풀이 | 4지선다 객관식, 타이머 | P0 |
+| 즉시 채점 | 정답/오답 판정, 해설 표시 | P0 |
+| 오답 관리 | 오답 목록 저장 및 조회 | P0 |
+| 학습 통계 | 정답률, 주제별 분석 | P0 |
+| 대시보드 | 학습 현황 요약 | P0 |
+
+### ❌ MVP에서 제외 (Phase 2 이후)
+
+- Google Colab 연동 (실습 문제)
+- Notion 연동 (오답노트 동기화)
+- 파인튜닝 모델
+- 크롤링 시스템
+- 모바일 앱 (React Native)
+- 소셜 로그인
+- 결제 시스템
+
+---
+
+## 🛠️ 기술 스택
+
+### Backend
+```
+- Language: Python 3.11+
+- Framework: FastAPI
+- ORM: SQLAlchemy 2.0 (async)
+- Database: PostgreSQL
+- Authentication: JWT (python-jose)
+- Password Hashing: passlib[bcrypt]
+- AI: anthropic (Claude API)
+```
+
+### Frontend
+```
+- Framework: React 18 + TypeScript
+- Styling: Tailwind CSS
+- State Management: Zustand
+- HTTP Client: Axios
+- Router: React Router v6
+```
+
+### Infrastructure
+```
+- Server: AWS EC2 or Local Docker
+- Database: PostgreSQL 15
+- Container: Docker + Docker Compose
+```
+
+---
+
+## 📁 프로젝트 구조
+
+```
+aice-master/
+├── backend/
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py                 # FastAPI 앱 진입점
+│   │   ├── core/
+│   │   │   ├── __init__.py
+│   │   │   ├── config.py           # 환경 설정
+│   │   │   ├── database.py         # DB 연결
+│   │   │   └── security.py         # JWT, 비밀번호
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── user.py             # 사용자 모델
+│   │   │   ├── question.py         # 문제, 주제 모델
+│   │   │   └── study.py            # 학습 세션, 답변, 오답 모델
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── user.py             # 사용자 스키마
+│   │   │   ├── question.py         # 문제 스키마
+│   │   │   └── study.py            # 학습 스키마
+│   │   ├── api/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth.py             # 인증 API
+│   │   │   ├── questions.py        # 문제 API
+│   │   │   ├── study.py            # 학습 API
+│   │   │   └── dashboard.py        # 대시보드 API
+│   │   └── services/
+│   │       ├── __init__.py
+│   │       └── claude_service.py   # Claude API 서비스
+│   ├── alembic/                    # DB 마이그레이션
+│   ├── tests/
+│   ├── requirements.txt
+│   ├── Dockerfile
+│   └── .env.example
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── stores/
+│   │   ├── services/
+│   │   └── App.tsx
+│   ├── package.json
+│   └── Dockerfile
+├── docker-compose.yml
+├── PROJECT.md                      # 이 문서
+└── README.md
+```
+
+---
+
+## 🗄️ 데이터베이스 스키마
+
+### 전체 ERD
+
+```
+users (사용자)
+  │
+  ├── study_sessions (학습 세션)
+  │     └── user_answers (답변)
+  │
+  ├── mistake_notes (오답노트)
+  │
+  └── questions (문제)
+        └── topics (주제)
+```
+
+### SQL 스키마
+
+```sql
+-- 1. 사용자 테이블
+CREATE TABLE users (
+    user_id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    is_verified BOOLEAN DEFAULT FALSE,
+    subscription_tier VARCHAR(20) DEFAULT 'free',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    last_login_at TIMESTAMP
+);
+
+CREATE INDEX idx_users_email ON users(email);
+
+-- 2. 주제 테이블
+CREATE TABLE topics (
+    topic_id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    code VARCHAR(50) UNIQUE,
+    description TEXT,
+    display_order INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+-- 초기 주제 데이터
+INSERT INTO topics (name, code, display_order) VALUES
+('AI 기초', 'AI_BASIC', 1),
+('머신러닝', 'ML', 2),
+('딥러닝', 'DL', 3),
+('CNN', 'CNN', 4),
+('RNN', 'RNN', 5),
+('자연어처리', 'NLP', 6),
+('데이터 전처리', 'DATA_PREP', 7),
+('모델 평가', 'EVALUATION', 8);
+
+-- 3. 문제 테이블
+CREATE TABLE questions (
+    question_id SERIAL PRIMARY KEY,
+    topic_id INTEGER REFERENCES topics(topic_id),
+    question_text TEXT NOT NULL,
+    option_a TEXT NOT NULL,
+    option_b TEXT NOT NULL,
+    option_c TEXT NOT NULL,
+    option_d TEXT NOT NULL,
+    correct_answer CHAR(1) NOT NULL CHECK (correct_answer IN ('a', 'b', 'c', 'd')),
+    explanation TEXT,
+    difficulty VARCHAR(20) DEFAULT 'medium' CHECK (difficulty IN ('easy', 'medium', 'hard')),
+    source VARCHAR(50) DEFAULT 'claude',
+    quality_score DECIMAL(3,2) DEFAULT 4.0,
+    used_count INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_questions_topic ON questions(topic_id);
+CREATE INDEX idx_questions_difficulty ON questions(difficulty);
+
+-- 4. 학습 세션 테이블
+CREATE TABLE study_sessions (
+    session_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+    topic_id INTEGER REFERENCES topics(topic_id),
+    difficulty VARCHAR(20),
+    question_count INTEGER DEFAULT 10,
+    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'completed', 'abandoned')),
+    started_at TIMESTAMP DEFAULT NOW(),
+    ended_at TIMESTAMP,
+    duration_seconds INTEGER,
+    questions_attempted INTEGER DEFAULT 0,
+    correct_answers INTEGER DEFAULT 0,
+    accuracy_rate DECIMAL(5,2)
+);
+
+CREATE INDEX idx_sessions_user ON study_sessions(user_id, started_at DESC);
+
+-- 5. 사용자 답변 테이블
+CREATE TABLE user_answers (
+    answer_id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+    question_id INTEGER REFERENCES questions(question_id) ON DELETE CASCADE,
+    session_id UUID REFERENCES study_sessions(session_id),
+    user_answer CHAR(1) NOT NULL CHECK (user_answer IN ('a', 'b', 'c', 'd')),
+    is_correct BOOLEAN NOT NULL,
+    time_spent_seconds INTEGER,
+    answered_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_answers_user ON user_answers(user_id, answered_at DESC);
+CREATE INDEX idx_answers_session ON user_answers(session_id);
+
+-- 6. 오답노트 테이블
+CREATE TABLE mistake_notes (
+    note_id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+    question_id INTEGER REFERENCES questions(question_id) ON DELETE CASCADE,
+    mistake_count INTEGER DEFAULT 1,
+    first_mistake_at TIMESTAMP DEFAULT NOW(),
+    last_mistake_at TIMESTAMP DEFAULT NOW(),
+    review_count INTEGER DEFAULT 0,
+    last_review_at TIMESTAMP,
+    mastered BOOLEAN DEFAULT FALSE,
+    mastered_at TIMESTAMP,
+    UNIQUE(user_id, question_id)
+);
+
+CREATE INDEX idx_mistakes_user ON mistake_notes(user_id);
+```
+
+---
+
+## 🔌 API 엔드포인트 명세
+
+### 인증 API (`/api/auth`)
+
+| Method | Endpoint | 설명 | Request Body | Response |
+|--------|----------|------|--------------|----------|
+| POST | `/register` | 회원가입 | `{email, password, name}` | `{access_token, user}` |
+| POST | `/login` | 로그인 | `{email, password}` | `{access_token, user}` |
+| GET | `/me` | 내 정보 조회 | - | `{user}` |
+| POST | `/logout` | 로그아웃 | - | `{message}` |
+
+### 문제 API (`/api/questions`)
+
+| Method | Endpoint | 설명 | Request Body | Response |
+|--------|----------|------|--------------|----------|
+| GET | `/topics` | 주제 목록 | - | `[{topic_id, name, code}]` |
+| POST | `/generate` | AI 문제 생성 | `{topic, difficulty, count}` | `{questions, topic, count}` |
+| GET | `/{id}` | 문제 조회 | - | `{question}` (정답 제외) |
+| POST | `/{id}/answer` | 답안 제출 | `{user_answer, time_spent}` | `{is_correct, explanation}` |
+| GET | `/{id}/solution` | 해설 조회 | - | `{question, answer, explanation}` |
+
+### 학습 API (`/api/study`)
+
+| Method | Endpoint | 설명 | Request Body | Response |
+|--------|----------|------|--------------|----------|
+| POST | `/sessions` | 세션 시작 | `{topic_id, difficulty, count}` | `{session_id, questions}` |
+| PUT | `/sessions/{id}` | 세션 종료 | - | `{session_result}` |
+| GET | `/sessions` | 세션 목록 | - | `[{sessions}]` |
+| GET | `/mistakes` | 오답 목록 | - | `[{mistakes}]` |
+| GET | `/history` | 학습 기록 | - | `{sessions, stats}` |
+
+### 대시보드 API (`/api/dashboard`)
+
+| Method | Endpoint | 설명 | Response |
+|--------|----------|------|----------|
+| GET | `/summary` | 학습 요약 | `{total_questions, accuracy, streak}` |
+| GET | `/stats/topics` | 주제별 통계 | `[{topic, accuracy, count}]` |
+| GET | `/stats/weekly` | 주간 통계 | `{daily_counts, accuracy_trend}` |
+
+---
+
+## 🤖 Claude API 문제 생성 로직
+
+### 프롬프트 구조
+
+```python
+system_prompt = """당신은 AICE Associate 자격증 전문 출제위원입니다.
+실제 시험과 동일한 스타일로 4지선다 객관식 문제를 출제합니다.
+
+출제 기준:
+1. KT AI 플랫폼 맥락에 맞는 실무형 문제
+2. 명확한 정답과 상세한 해설 제공
+3. 오답 선택지도 그럴듯하게 작성
+4. 난이도에 맞는 문제 구성
+
+난이도 기준:
+- easy: 기본 개념 확인, 단순 암기형
+- medium: 개념 이해 및 적용, 분석형
+- hard: 복합 개념, 실무 응용, 추론형"""
+
+user_prompt = f"""다음 조건으로 AICE Associate 문제 {count}개를 생성하세요.
+
+주제: {topic}
+난이도: {difficulty}
+문제 수: {count}개
+
+반드시 다음 JSON 배열 형식으로만 응답하세요:
+[
+  {{
+    "question_text": "문제 내용",
+    "option_a": "선택지 A",
+    "option_b": "선택지 B",
+    "option_c": "선택지 C",
+    "option_d": "선택지 D",
+    "correct_answer": "a",
+    "explanation": "상세한 해설",
+    "difficulty": "{difficulty}"
+  }}
+]"""
+```
+
+### 응답 처리
+
+```python
+# JSON 파싱 및 검증
+def parse_claude_response(content: str) -> List[dict]:
+    # 마크다운 코드블록 제거
+    if "```json" in content:
+        content = content.split("```json")[1].split("```")[0]
+    elif "```" in content:
+        content = content.split("```")[1].split("```")[0]
+    
+    questions = json.loads(content.strip())
+    
+    # 유효성 검증
+    validated = []
+    for q in questions:
+        if validate_question(q):
+            validated.append(q)
+    
+    return validated
+
+def validate_question(q: dict) -> bool:
+    required = ["question_text", "option_a", "option_b", 
+                "option_c", "option_d", "correct_answer", "explanation"]
+    
+    for field in required:
+        if field not in q or not q[field]:
+            return False
+    
+    if q["correct_answer"].lower() not in ["a", "b", "c", "d"]:
+        return False
+    
+    return True
+```
+
+---
+
+## 📦 의존성 패키지
+
+### requirements.txt
+
+```txt
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy[asyncio]==2.0.25
+asyncpg==0.29.0
+alembic==1.13.1
+
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# AI
+anthropic==0.18.1
+
+# Utilities
+pydantic==2.6.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.1
+
+# Development
+pytest==8.0.0
+pytest-asyncio==0.23.4
+httpx==0.26.0
+```
+
+---
+
+## ⚙️ 환경 설정
+
+### .env.example
+
+```env
+# App
+APP_NAME=AICE Master
+DEBUG=True
+
+# Database
+DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/aice_master
+
+# JWT
+JWT_SECRET_KEY=your-super-secret-key-change-in-production
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=10080
+
+# Claude API
+ANTHROPIC_API_KEY=your-anthropic-api-key
+
+# CORS
+CORS_ORIGINS=["http://localhost:3000","http://localhost:5173"]
+```
+
+---
+
+## 🐳 Docker 설정
+
+### docker-compose.yml
+
+```yaml
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: aice_master
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:password@db:5432/aice_master
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+```
+
+### backend/Dockerfile
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+```
+
+---
+
+## 🚀 개발 순서 체크리스트
+
+### Phase 1: 프로젝트 설정 (Day 1-2)
+
+- [ ] 프로젝트 폴더 구조 생성
+- [ ] Python 가상환경 설정
+- [ ] requirements.txt 패키지 설치
+- [ ] .env 파일 설정
+- [ ] Docker Compose로 PostgreSQL 실행
+- [ ] FastAPI 기본 앱 실행 확인
+
+### Phase 2: 데이터베이스 (Day 3-4)
+
+- [ ] SQLAlchemy 모델 작성 (User, Topic, Question, StudySession, UserAnswer, MistakeNote)
+- [ ] Alembic 마이그레이션 설정
+- [ ] 초기 마이그레이션 실행
+- [ ] 초기 데이터 삽입 (Topics)
+
+### Phase 3: 인증 시스템 (Day 5-6)
+
+- [ ] JWT 토큰 유틸리티 구현
+- [ ] 비밀번호 해싱 구현
+- [ ] 회원가입 API
+- [ ] 로그인 API
+- [ ] 인증 미들웨어 (get_current_user)
+- [ ] Postman/curl로 테스트
+
+### Phase 4: 문제 API (Day 7-10)
+
+- [ ] Claude API 서비스 구현
+- [ ] 문제 생성 API (POST /api/questions/generate)
+- [ ] 주제 목록 API (GET /api/questions/topics)
+- [ ] 문제 조회 API (GET /api/questions/{id})
+- [ ] 답안 제출 API (POST /api/questions/{id}/answer)
+- [ ] 해설 조회 API (GET /api/questions/{id}/solution)
+
+### Phase 5: 학습 API (Day 11-13)
+
+- [ ] 세션 시작 API
+- [ ] 세션 종료 API
+- [ ] 오답노트 자동 추가 로직
+- [ ] 오답 목록 조회 API
+- [ ] 학습 기록 조회 API
+
+### Phase 6: 대시보드 API (Day 14-15)
+
+- [ ] 학습 요약 API
+- [ ] 주제별 통계 API
+- [ ] 주간 통계 API
+
+### Phase 7: 프론트엔드 (Day 16-25)
+
+- [ ] React 프로젝트 설정
+- [ ] Tailwind CSS 설정
+- [ ] API 서비스 레이어 구현
+- [ ] 인증 스토어 (Zustand)
+- [ ] 로그인/회원가입 페이지
+- [ ] 대시보드 페이지
+- [ ] 문제 생성 페이지
+- [ ] 문제 풀이 페이지
+- [ ] 결과 화면
+- [ ] 오답노트 페이지
+- [ ] 학습 기록 페이지
+
+### Phase 8: 테스트 및 배포 (Day 26-30)
+
+- [ ] API 테스트 작성
+- [ ] 버그 수정
+- [ ] Docker 이미지 빌드
+- [ ] 배포
+
+---
+
+## 💡 Claude Code 사용 팁
+
+### 1. 프로젝트 시작 명령
+
+```bash
+# 프로젝트 폴더에서 Claude Code 실행
+cd aice-master
+claude
+
+# 첫 번째 명령
+> 이 PROJECT.md 파일을 읽고 백엔드 개발을 시작해줘. 
+> Phase 1부터 순서대로 진행하자.
+```
+
+### 2. 단계별 요청 예시
+
+```bash
+# 프로젝트 구조 생성
+> backend 폴더 구조를 만들고 기본 FastAPI 앱을 설정해줘
+
+# DB 모델 생성
+> SQLAlchemy 모델을 만들어줘 (User, Topic, Question, StudySession, UserAnswer, MistakeNote)
+
+# 인증 구현
+> JWT 기반 인증 시스템을 구현해줘 (회원가입, 로그인)
+
+# Claude API 연동
+> Claude API를 사용해서 문제 생성 서비스를 구현해줘
+
+# 프론트엔드
+> React + TypeScript로 프론트엔드를 구현해줘
+```
+
+### 3. 문제 발생 시
+
+```bash
+> 현재 오류 메시지: [오류 내용]
+> 이 문제를 해결해줘
+
+> 테스트 실행 결과: [결과]
+> 실패한 테스트를 수정해줘
+```
+
+---
+
+## 📊 MVP 성공 지표
+
+| 지표 | 목표 | 측정 방법 |
+|------|------|-----------|
+| 문제 생성 성공률 | 95%+ | Claude API 응답 성공률 |
+| API 응답 시간 | 2초 이내 | 평균 응답 시간 |
+| 가입자 수 (1개월) | 100명+ | DB users 테이블 |
+| 일일 활성 사용자 | 20명+ | 일일 세션 수 |
+| 문제 품질 만족도 | 4.0/5.0+ | 사용자 피드백 |
+
+---
+
+## 🔗 참고 자료
+
+- [FastAPI 공식 문서](https://fastapi.tiangolo.com/)
+- [SQLAlchemy 2.0 문서](https://docs.sqlalchemy.org/en/20/)
+- [Anthropic Claude API](https://docs.anthropic.com/)
+- [React 공식 문서](https://react.dev/)
+- [Tailwind CSS](https://tailwindcss.com/)
+
+---
+
+**이 문서를 기반으로 Claude Code에서 MVP 개발을 시작하세요!**
