@@ -1,2 +1,3 @@
-# aice_project
-AICE 학습 도우미
+git add .
+git commit -m "Update README and initial setup"
+git push
