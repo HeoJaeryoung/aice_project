@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
 
-    # Claude API
-    ANTHROPIC_API_KEY: str = ""
+    # OpenAI API
+    OPENAI_API_KEY: str = ""
 
     # CORS
     CORS_ORIGINS: str = '["http://localhost:3000","http://localhost:5173"]'

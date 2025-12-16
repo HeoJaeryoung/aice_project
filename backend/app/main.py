@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.api import auth_router, questions_router, study_router, dashboard_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -31,3 +32,10 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+
+# Include routers
+app.include_router(auth_router)
+app.include_router(questions_router)
+app.include_router(study_router)
+app.include_router(dashboard_router)
